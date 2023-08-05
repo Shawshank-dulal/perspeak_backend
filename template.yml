@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: "AWS::Serverless-2016-10-31"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Specifies the deployment enviroment production or staging
+    AllowedValues:
+      - dev
+      - staging
+      - production
+  Region:
+    Type: String
+    Description: Specifies the deployment region
+
+Globals:
+  Api:
+    BinaryMediaTypes:
+      - "multipart/form-data"
+    Cors:
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+        AllowMethods: "'OPTIONS, POST, GET, PUT, DELETE'"
+  Function:
+    Runtime: python3.10
+    MemorySize: 128
+    Timeout: 60
+    Tags:
+      project: perspeak
+      environment: !Ref Stage
+
+Resources:
+  InquiryApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "perspeak-enquiry-api-${Stage}"
+      StageName: !Ref Stage
+      OpenApiVersion: 3.0.1
+
+  CreateInquiryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Stage}-enquiry"
+      CodeUri: ./src/createEnquiry/
+      Handler: app.handler
+      Environment:
+        Variables:
+          TABLE: !Ref EnquiryTable
+          REGION: !Ref Region
+          STAGE: !Ref Stage
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambda_ReadOnlyAccess
+        - DynamoDBWritePolicy:
+            TableName: !Ref EnquiryTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref EnquiryTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+            RestApiId: !Ref InquiryApi
+
+  EnquiryTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${Stage}-perspeak-inquiry'
+      AttributeDefinitions:
+        - AttributeName: 'pk'
+          AttributeType: 'S'
+      KeySchema:
+      - AttributeName: 'pk'
+        KeyType: 'HASH'
+      BillingMode: 'PAY_PER_REQUEST'
+
+       
